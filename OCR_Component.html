@@ -1,0 +1,150 @@
+<!-- 
+  ============================================================
+  EWMS - OCR Component (Client-side)
+  Includes HTML structure, CSS for scanning animation, and JS logic.
+  ============================================================
+-->
+
+<!-- 1. HTML Structure -->
+<div id="ocr-module-container" class="space-y-4">
+  <div id="ocrZone" class="relative overflow-hidden rounded-2xl bg-slate-100 border-2 border-dashed border-slate-200 transition-all duration-300">
+    <!-- Preview Image -->
+    <img id="ocrPreview" class="w-full h-full object-cover opacity-0 transition-opacity duration-300" src="" />
+    
+    <!-- Placeholder / Instructions -->
+    <div id="ocrPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 space-y-2">
+      <span class="material-symbols-rounded text-4xl">photo_camera</span>
+      <p class="text-xs font-bold uppercase tracking-wider">ถ่ายรูปมิเตอร์เพื่ออ่านเลข</p>
+    </div>
+
+    <!-- Scanning Animation Overlay -->
+    <div id="ocrScanner" class="absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-300">
+      <div class="absolute w-full h-[2px] bg-primary/50 shadow-[0_0_15px_rgba(0,129,207,0.8)] animate-scan"></div>
+      <div class="absolute inset-0 bg-primary/5 animate-pulse"></div>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="flex gap-2">
+    <button onclick="openOcrCamera()" class="flex-1 bg-primary text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg shadow-primary/20">
+      <span class="material-symbols-rounded">photo_camera</span> ถ่ายรูป
+    </button>
+    <button id="btnResetOcr" onclick="resetOcrApp()" class="px-6 bg-slate-100 text-slate-400 py-4 rounded-2xl font-bold active:scale-95 transition-transform">
+      <span class="material-symbols-rounded">refresh</span>
+    </button>
+  </div>
+
+  <!-- Hidden File Input -->
+  <input type="file" id="ocrCaptureInput" accept="image/*" capture="environment" class="hidden" onchange="handleOcrFile(event)">
+</div>
+
+<!-- 2. CSS Styles -->
+<style>
+  #ocrZone {
+    aspect-ratio: 21 / 9; /* Adjusted for typical meter shape */
+  }
+  #ocrZone.has-img #ocrPreview {
+    opacity: 1;
+  }
+  #ocrZone.has-img #ocrPlaceholder {
+    display: none;
+  }
+  #ocrZone.scanning #ocrScanner {
+    opacity: 1;
+  }
+
+  @keyframes scan {
+    0% { top: 5%; opacity: 0; }
+    5% { opacity: 1; }
+    95% { opacity: 1; }
+    100% { top: 95%; opacity: 0; }
+  }
+  .animate-scan {
+    animation: scan 2s linear infinite;
+  }
+</style>
+
+<!-- 3. JavaScript Logic -->
+<script>
+  let ocrImg64 = null;
+
+  /**
+   * openOcrCamera()
+   * Triggers the native camera/file picker.
+   */
+  function openOcrCamera() {
+    document.getElementById('ocrCaptureInput').click();
+  }
+
+  /**
+   * handleOcrFile(event)
+   * Reads the selected file and displays preview.
+   */
+  function handleOcrFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      ocrImg64 = ev.target.result;
+      document.getElementById('ocrPreview').src = ocrImg64;
+      document.getElementById('ocrZone').classList.add('has-img');
+
+      // Auto-trigger analysis
+      analyzeOcr();
+    };
+    reader.readAsDataURL(file);
+    e.target.value = ''; // Reset input
+  }
+
+  /**
+   * analyzeOcr()
+   * Sends the base64 image to GAS for AI processing.
+   */
+  function analyzeOcr() {
+    if (!ocrImg64) return;
+    
+    const zone = document.getElementById('ocrZone');
+    zone.classList.add('scanning');
+
+    // Timeout safety (30s)
+    const timeoutId = setTimeout(() => {
+      zone.classList.remove('scanning');
+      alert('AI analysis timed out. Please try again.');
+    }, 30000);
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        clearTimeout(timeoutId);
+        zone.classList.remove('scanning');
+        
+        if (res.success) {
+          // Callback to parent application
+          if (window.onOcrSuccess) {
+            window.onOcrSuccess(res.reading);
+          } else {
+            console.log('OCR Result:', res.reading);
+            alert('AI read value: ' + res.reading);
+          }
+        } else {
+          alert('AI could not read the image: ' + res.error);
+        }
+      })
+      .withFailureHandler(function(err) {
+        clearTimeout(timeoutId);
+        zone.classList.remove('scanning');
+        alert('OCR Failed: ' + err.message);
+      })
+      .readElecMeterFromBase64(ocrImg64);
+  }
+
+  /**
+   * resetOcrApp()
+   * Clears the current image and state.
+   */
+  function resetOcrApp() {
+    ocrImg64 = null;
+    document.getElementById('ocrPreview').src = '';
+    document.getElementById('ocrZone').classList.remove('has-img', 'scanning');
+  }
+</script>
