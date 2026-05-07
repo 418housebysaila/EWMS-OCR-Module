@@ -1,4 +1,4 @@
-# EWMS-OCR-Module 📸
+# EWMS-OCR-Module-Vibe Code  📸
 
 ระบบอ่านเลขมิเตอร์ไฟฟ้าด้วย AI (OCR) สำหรับใช้งานบน Google Apps Script โดยใช้ Gemini AI API
 
